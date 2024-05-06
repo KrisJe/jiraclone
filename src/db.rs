@@ -1,10 +1,85 @@
-//use anyhow::Result;
+
 
 use crate::models::{DBState, Epic, Story, Status};
 use std::io::{Write, Read};
 use std::fs;
 
-use anyhow::Result;
+use anyhow::{Error, Result};
+use anyhow::anyhow;
+
+
+pub struct JiraDatabase {
+    database: Box<dyn Database>,
+    readonly : bool
+}
+
+#[allow(unused_variables)]
+impl JiraDatabase {
+    pub fn new(file_path: String) -> Self {
+        Self {
+            database: Box::new(JSONFileDatabase { file_path }),
+            readonly: false        
+        }
+    }
+
+    pub fn read_db(&self) -> Result<DBState> {
+        self.database.read_db()
+    }
+    
+    pub fn create_epic(&self, epic: Epic) -> Result<u32> {
+            let mut parsed = self.database.read_db()?;
+
+            let lastid = parsed.last_item_id;
+            let newid = lastid+1;
+
+            parsed.last_item_id = newid;
+            parsed.epics.insert(newid, epic);
+        
+            if (!self.readonly) {  self.database.write_db(&parsed)?;}
+            Ok(newid)
+    }
+    
+    pub fn create_story(&self, story: Story, epic_id: u32) -> Result<u32> {
+        let mut parsed = self.database.read_db()?;
+    
+        let last_id = parsed.last_item_id;
+        let new_id = last_id + 1;
+        
+        parsed.last_item_id = new_id;
+        parsed.stories.insert(new_id, story);
+
+
+        //parsed.epics.get_mut(&epic_id).ok_or_else(|| anyhow!("could not find epic in database!"))?.stories.push(new_id);
+        let eid = parsed.epics.get_mut(&epic_id);
+
+        match eid {
+            Some(eid)=>{ eid.stories.push(new_id);},
+            //None =>  println!("could not find epic in database!"), 
+            //None => { return Err("could not find epic in database!".to_string())} ,  
+            _ => ()
+        }    
+    
+        self.database.write_db(&parsed)?;
+        Ok(new_id)
+     
+    }
+    
+    pub fn delete_epic(&self, epic_id: u32) -> Result<()> {
+        todo!()
+    }
+    
+    pub fn delete_story(&self,epic_id: u32, story_id: u32) -> Result<()> {
+        todo!()
+    }
+    
+    pub fn update_epic_status(&self, epic_id: u32, status: Status) -> Result<()> {
+        todo!()
+    }
+    
+    pub fn update_story_status(&self, story_id: u32, status: Status) -> Result<()> {
+        todo!()
+    }
+}
 
 trait Database {
     fn read_db(&self) -> Result<DBState>;
@@ -25,8 +100,8 @@ impl Database for JSONFileDatabase {
             }
             Err(e) => {
                 println!("Error reading file: {}", e);
-                //return Err(e.into());
-                return Ok(DBState::new());
+                return Err(e.into());
+                //return Ok(DBState::new());
             }
         }      
     }
